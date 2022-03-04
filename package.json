@@ -1,0 +1,12 @@
+{
+  "name": "xhistory",
+  "version": "0.0.1",
+  "description": "utool plugin",
+  "main": "preload.js",
+  "repository": "https://github.com/undermoodzyx/xhistory.git",
+  "author": "undermoodzyx <mygmzyx@gmail.com>",
+  "license": "WTFL",
+  "dependencies": {
+    "sqlite3": "^5.0.2"
+  }
+}
