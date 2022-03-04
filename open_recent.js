@@ -1,10 +1,26 @@
-const fs = require('fs');
 const path = require('path');
+
+
+const sqlite3 = require('sqlite3').verbose();
 
 const editors = {
 	vscode: {
-		getOpenedRecentFiles() {
-			const data = fs.readFileSync(`${process.env.HOME}/Library/Application Support/Code/storage.json`, 'utf8');
+		async getOpenedRecentFiles() {
+			const db = new sqlite3.Database(`${process.env.HOME}/Library/Application Support/Code/User/globalStorage/state.vscdb`);
+			const data = await new Promise((res, rej) => {
+				db.get('select value from ItemTable where key="history.recentlyOpenedPathsList";', (err, result) => {
+					if (err) {
+						rej(err);
+						return;
+					}
+					
+					res(result?.value);
+				})
+			}).catch((er) => {
+				console.log(er);
+				return {};
+			});
+	
 			let storedJson;
 			try {
 				storedJson = JSON.parse(data);
@@ -12,35 +28,60 @@ const editors = {
 			catch (e) {
 				storedJson = {};
 			}
-			const items = storedJson?.lastKnownMenubarData?.menus?.File?.items ?? [];
-			const openRecentInfo = items.find(item => {
-				return item?.id === 'submenuitem.33';
-			});
 
-			if ('object' !== typeof openRecentInfo) {
-				return [];
-			}
-
-			const openRecentItems = openRecentInfo?.submenu?.items ?? [];
-			if (!Array.isArray(openRecentItems)) {
-				return [];
-			}
-
-			const recentFiles = openRecentItems.filter((item) => {
-				return ['openRecentFolder', 'openRecentFile'].includes(item?.id);
-			});
-
-			return recentFiles.map((fileInfo) => {
-				const filePath = fileInfo?.uri?.path;
-				return {
-					title: path.basename(filePath),
+			const filesInfo = [];
+			storedJson?.entries.forEach((item) => {
+				const filePath = item?.folderUri || item?.fileUri || '';
+				if (!filePath) {
+					return;	
+				}
+				
+				const info = {
+					title: decodeURIComponent(path.basename(filePath)),
 					description: filePath,
-					url: filePath,
-					// icon: '', todo: icon
+					url: filePath.replace(/^file:\/\//, ''),
 				};
-			});
+				if (item?.folderUri) {
+					info.isDir = true;
+				}
+				else if (item.fileUri) {
+					info.isFile = true;
+				}
+
+				filesInfo.push(info);
+			})
+			return filesInfo;	
 		},
 	},
 };
 
-module.exports = editors;
+async function getAllOpenedRecentFiles() {
+	const editorKeys = Object.keys(editors);
+	const editorIterator = {
+		[Symbol.asyncIterator]() {
+			return {
+				i: 0,
+				async next() {
+					if (this.i < editorKeys.length) {
+						this.i++;
+						return Promise.resolve({
+							done: false,
+							value: await editors[editorKeys].getOpenedRecentFiles(),
+						});
+					}
+
+					return Promise.resolve({ done: true });
+				}
+			};
+		},
+	};
+
+	let allFiles = [];
+	for await (const files of editorIterator) {
+		allFiles = allFiles.concat(files);
+	}
+	return allFiles;
+}
+
+exports.getAllOpenedRecentFiles = getAllOpenedRecentFiles;
+exports.editors = editors;

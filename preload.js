@@ -1,5 +1,5 @@
 const cp = require('child_process');
-const { vscode } = require('./open_recent');
+const { getAllOpenedRecentFiles } = require('./open_recent');
 
 let cache;
 
@@ -7,9 +7,9 @@ window.exports = {
 	"xhistory": {
 		 mode: "list",
 		 args: {
-				enter: (action, callbackSetList) => {
+				enter: async (action, callbackSetList) => {
 					if (!cache) {
-						cache = vscode.getOpenedRecentFiles();
+						cache = await getAllOpenedRecentFiles();
 						callbackSetList(cache);
 						return;
 					}
@@ -17,6 +17,10 @@ window.exports = {
 					callbackSetList(cache);
 				},
 				search: (action, searchWord, callbackSetList) => {	
+					if (!Array.isArray(cache)) {
+						return;
+					}
+					
 					 const searchList = cache.filter((item) => {
 						 return item.title.toLowerCase().includes(searchWord);
 					 });
